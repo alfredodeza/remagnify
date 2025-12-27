@@ -261,15 +261,15 @@ impl Magnifier {
         // Mark initialization as complete
         state.initialization_complete = true;
 
-        // Use the first VALID Enter event from initialization to set initial pointer position
-        // Only Enter events with valid coordinates represent where the pointer actually is
+        // Set initial state from Enter events if available
+        // But DON'T confirm position yet - wait for Motion to ensure accuracy
         if let Some((monitor_idx, x, y)) = state.first_enter_during_init {
             state.active_monitor = Some(monitor_idx);
             state.magnifier_position = Vector2D::new(x, y);
-            state.pointer_position_confirmed = true;
-            log::info!("Using last Enter event from init: monitor {} at ({}, {})", monitor_idx, x, y);
+            // pointer_position_confirmed stays false - will be set by Motion event
+            log::info!("→ Initial state from Enter: monitor {} at ({:.1}, {:.1}) - waiting for Motion to confirm", monitor_idx, x, y);
         } else {
-            log::debug!("No Enter events during init, waiting for pointer events...");
+            log::info!("→ No Enter events during init - waiting for pointer Motion");
         }
 
         log::info!("All layer surfaces mapped and ready for input");
@@ -415,7 +415,8 @@ impl AppState {
         self.renderer.set_zoom(self.zoom);
 
         // Only show magnifier on the active monitor AND if we have a confirmed pointer position
-        // The initial Enter event during startup may be unreliable, so we wait for Motion
+        // We wait for the first Motion event to ensure accurate coordinates (Enter events
+        // during initialization can have wrong coordinates for offset monitors)
         let is_active = self.pointer_position_confirmed && self.active_monitor == Some(monitor_idx);
 
         if is_active {
@@ -714,12 +715,12 @@ impl Dispatch<WlPointer, ()> for AppState {
 
                         if coords_valid && state.first_enter_during_init.is_none() {
                             state.first_enter_during_init = Some((idx, local_x, local_y));
-                            log::debug!("Saved FIRST valid Enter event during init for monitor {} at ({}, {})", idx, local_x, local_y);
+                            log::info!("✓ Saved FIRST valid Enter: monitor {} at ({:.1}, {:.1})", idx, local_x, local_y);
                         } else if !coords_valid {
-                            log::debug!("Ignoring Enter event during init with invalid coordinates: monitor {} at ({}, {}) outside {}x{}",
-                                idx, local_x, local_y, monitor_size.x, monitor_size.y);
+                            log::info!("✗ Ignoring invalid Enter: monitor {} at ({:.1}, {:.1}) outside {}x{}",
+                                idx, local_x, local_y, monitor_size.x as i32, monitor_size.y as i32);
                         } else {
-                            log::debug!("Ignoring subsequent Enter event during init for monitor {}", idx);
+                            log::info!("⊘ Ignoring subsequent Enter: monitor {}", idx);
                         }
                         return;
                     }
@@ -727,21 +728,11 @@ impl Dispatch<WlPointer, ()> for AppState {
                     state.active_monitor = Some(idx);
                     state.magnifier_position = Vector2D::new(local_x, local_y);
 
-                    // Validate that the pointer coordinates are within the monitor bounds
-                    // If valid, we can trust this Enter event and show the magnifier immediately
-                    // Invalid coordinates might indicate Wayland delivered Enter to wrong surface
-                    let coords_valid = local_x >= 0.0 && local_x <= monitor_size.x
-                        && local_y >= 0.0 && local_y <= monitor_size.y;
+                    // Note: We don't confirm position from Enter events (even after init)
+                    // because they can still be inaccurate. We wait for Motion to confirm.
 
-                    if coords_valid && !state.pointer_position_confirmed {
-                        state.pointer_position_confirmed = true;
-                        log::info!("Pointer position confirmed via Enter event with valid coordinates");
-                    } else if !coords_valid {
-                        log::warn!("Enter event has invalid coordinates ({}, {}) for monitor size {}x{}, waiting for Motion",
-                            local_x, local_y, monitor_size.x, monitor_size.y);
-                    }
-
-                    // Render at new pointer position (will show magnifier if position is confirmed)
+                    // Render at new pointer position
+                    // (magnifier will only show if pointer_position_confirmed is true from Motion)
                     if state.monitors.get(idx).and_then(|m| m.screen_buffer.as_ref()).is_some() {
                         if let Err(e) = Self::render_monitor(state, idx, _qh) {
                             log::error!("Failed to render on entry: {}", e);
@@ -770,7 +761,7 @@ impl Dispatch<WlPointer, ()> for AppState {
                 // Mark position as confirmed on first motion
                 if !state.pointer_position_confirmed {
                     state.pointer_position_confirmed = true;
-                    log::info!("Pointer position confirmed via Motion event");
+                    log::info!("✓ Pointer position confirmed via Motion - magnifier will now be visible");
                 }
 
                 // Convert coordinates (handle Hyprland's global coordinates quirk)
