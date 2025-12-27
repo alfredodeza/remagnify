@@ -15,6 +15,63 @@ A Rust port of [hyprmagnifier](https://github.com/hyprwm/hyprmagnifier), a wlroo
 - **Customizable magnifier window size**
 - **Keyboard shortcut**: Press `Escape` to exit
 
+## Quick Start
+
+### Typical Usage
+
+Most users will want a larger magnifier window with faster zoom and a slight delay before auto-exit:
+
+```bash
+remagnify -z 0.2 --exit-delay 500 --size 1200x600
+```
+
+This configuration provides:
+- **Large viewing area**: 1200x600 pixels for comfortable reading
+- **Responsive zoom**: 0.2 zoom speed (4x faster than default)
+- **Smooth exit**: 500ms delay after zooming out completely
+
+### Hyprland Integration
+
+Add to your `~/.config/hypr/hyprland.conf`:
+
+```conf
+# Toggle magnifier with Super+M
+bind = SUPER, M, exec, pkill remagnify || remagnify -z 0.2 --exit-delay 500 --size 1200x600
+
+# Alternative: Dedicated magnifier that stays visible
+bind = SUPER_SHIFT, M, exec, remagnify --size 800x400 --show-cursor
+
+# Quick magnifier with default settings
+bind = SUPER_ALT, M, exec, remagnify
+```
+
+**How it works:**
+- `pkill remagnify || remagnify ...` - Toggles: kills if running, starts if not
+- Press `Super+M` to activate, scroll to zoom, press `Escape` or zoom out to exit
+- The magnifier auto-exits when you zoom out to 1.0x (no magnification)
+
+### Common Configurations
+
+**Reading small text (maximum magnification area):**
+```bash
+remagnify --size 1920x1080 -z 0.15
+```
+
+**Quick inspection (small, fast):**
+```bash
+remagnify --size 400x200 -z 0.3
+```
+
+**Presentation mode (visible cursor, no auto-exit):**
+```bash
+remagnify --size 800x600 --show-cursor --exit-delay 0
+```
+
+**Development/debugging (custom position tracking):**
+```bash
+remagnify --move-type corner --size 600x400
+```
+
 ## Requirements
 
 - Rust 1.70+ (2021 edition)
@@ -67,6 +124,7 @@ remagnify [OPTIONS]
 - `-r, --render-inactive` - Render inactive displays as frozen snapshots
 - `-c, --continuous <BOOL>` - Enable continuous capture for live updates (default: `true`)
 - `-t, --no-fractional` - Disable fractional scaling
+- `--show-cursor` - Show cursor while magnifying (cursor is hidden by default)
 - `-q, --quiet` - Quiet mode (errors only)
 - `-v, --verbose` - Verbose logging
 - `-h, --help` - Print help information
@@ -86,6 +144,9 @@ remagnify --move-type corner
 
 # Disable continuous capture (single screenshot)
 remagnify --continuous false
+
+# Show cursor while magnifying
+remagnify --show-cursor
 
 # Verbose logging
 remagnify --verbose

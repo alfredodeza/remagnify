@@ -35,6 +35,7 @@ pub struct Config {
     pub continuous_capture: bool,
     pub zoom_speed: f64,
     pub exit_delay_ms: u64,
+    pub hide_cursor: bool,
 }
 
 impl Default for Config {
@@ -47,6 +48,7 @@ impl Default for Config {
             continuous_capture: true,
             zoom_speed: 0.05, // Default zoom speed (5% per scroll notch)
             exit_delay_ms: 200, // Default 200ms delay before exit
+            hide_cursor: true, // Hide cursor by default
         }
     }
 }
@@ -94,6 +96,10 @@ pub struct Cli {
     /// Verbose logging
     #[arg(short, long)]
     pub verbose: bool,
+
+    /// Show cursor (cursor is hidden by default)
+    #[arg(long)]
+    pub show_cursor: bool,
 }
 
 /// Parse a size string in the format "WIDTHxHEIGHT".
@@ -156,6 +162,7 @@ impl Config {
             continuous_capture: cli.continuous,
             zoom_speed: cli.zoom_speed.clamp(0.001, 1.0),
             exit_delay_ms: cli.exit_delay.min(5000),
+            hide_cursor: !cli.show_cursor, // Invert: show_cursor flag disables hiding
         }
     }
 
@@ -196,6 +203,7 @@ mod tests {
             exit_delay: 500,
             quiet: false,
             verbose: false,
+            show_cursor: false,
         };
 
         let config = Config::from_cli(cli);
@@ -203,6 +211,7 @@ mod tests {
         assert_eq!(config.size.y, 200.0);
         assert_eq!(config.zoom_speed, 0.1);
         assert_eq!(config.exit_delay_ms, 500);
+        assert_eq!(config.hide_cursor, true); // Default: cursor hidden
     }
 
     #[test]
@@ -218,6 +227,7 @@ mod tests {
             exit_delay: 200,
             quiet: false,
             verbose: false,
+            show_cursor: false,
         };
 
         let config = Config::from_cli(cli_too_low);
@@ -233,6 +243,7 @@ mod tests {
             exit_delay: 200,
             quiet: false,
             verbose: false,
+            show_cursor: false,
         };
 
         let config = Config::from_cli(cli_too_high);
@@ -252,9 +263,47 @@ mod tests {
             exit_delay: 10000, // Too high
             quiet: false,
             verbose: false,
+            show_cursor: false,
         };
 
         let config = Config::from_cli(cli);
         assert!(config.exit_delay_ms <= 5000); // Should be clamped to 5000ms max
+    }
+
+    #[test]
+    fn test_cursor_hiding_config() {
+        // Test that cursor is hidden by default
+        let cli_default = Cli {
+            move_type: MoveType::Cursor,
+            size: None,
+            render_inactive: false,
+            no_fractional: false,
+            continuous: true,
+            zoom_speed: 0.05,
+            exit_delay: 200,
+            quiet: false,
+            verbose: false,
+            show_cursor: false, // Default: don't show cursor
+        };
+
+        let config = Config::from_cli(cli_default);
+        assert_eq!(config.hide_cursor, true); // Cursor should be hidden
+
+        // Test that --show-cursor flag works
+        let cli_show = Cli {
+            move_type: MoveType::Cursor,
+            size: None,
+            render_inactive: false,
+            no_fractional: false,
+            continuous: true,
+            zoom_speed: 0.05,
+            exit_delay: 200,
+            quiet: false,
+            verbose: false,
+            show_cursor: true, // Explicitly show cursor
+        };
+
+        let config = Config::from_cli(cli_show);
+        assert_eq!(config.hide_cursor, false); // Cursor should be visible
     }
 }

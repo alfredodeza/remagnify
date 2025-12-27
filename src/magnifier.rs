@@ -29,6 +29,7 @@ pub struct AppState {
     compositor: Option<WlCompositor>,
     shm: Option<WlShm>,
     seat: Option<WlSeat>,
+    pointer: Option<WlPointer>,
     layer_shell: Option<wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1>,
     screencopy_manager: Option<wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1>,
     monitors: Vec<Monitor>,
@@ -44,6 +45,7 @@ pub struct AppState {
     zoom: f64,
     zoom_speed: f64,
     exit_delay_ms: u64,
+    hide_cursor: bool,
     active_monitor: Option<usize>, // Which monitor the cursor is currently on
 
     // Renderer
@@ -102,6 +104,7 @@ impl Magnifier {
             compositor: None,
             shm: None,
             seat: None,
+            pointer: None,
             layer_shell: None,
             screencopy_manager: None,
             monitors: Vec::new(),
@@ -113,6 +116,7 @@ impl Magnifier {
             zoom: 0.5, // 2x zoom (zoom = 0.5 means we show half the area, effectively 2x magnification)
             zoom_speed: self.config.zoom_speed,
             exit_delay_ms: self.config.exit_delay_ms,
+            hide_cursor: self.config.hide_cursor,
             active_monitor: None, // Will be set when pointer enters a surface
             renderer: Renderer::new(),
             running: self.running.clone(),
@@ -532,7 +536,7 @@ impl Dispatch<WlShm, ()> for AppState {
 
 impl Dispatch<WlSeat, ()> for AppState {
     fn event(
-        _state: &mut Self,
+        state: &mut Self,
         seat: &WlSeat,
         event: <WlSeat as wayland_client::Proxy>::Event,
         _: &(),
@@ -557,8 +561,9 @@ impl Dispatch<WlSeat, ()> for AppState {
 
                 if caps & pointer_cap != 0 {
                     log::info!("Getting pointer from seat...");
-                    seat.get_pointer(qh, ());
-                    log::info!("Pointer object requested");
+                    let pointer = seat.get_pointer(qh, ());
+                    state.pointer = Some(pointer);
+                    log::info!("Pointer object requested and stored");
                 }
 
                 if caps & keyboard_cap != 0 {
@@ -679,7 +684,15 @@ impl Dispatch<WlPointer, ()> for AppState {
         log::trace!("WlPointer event: {:?}", event);
 
         match event {
-            Event::Enter { surface, surface_x, surface_y, .. } => {
+            Event::Enter { serial, surface, surface_x, surface_y } => {
+                // Hide the cursor when entering our surfaces (if configured)
+                if state.hide_cursor {
+                    if let Some(ref pointer) = state.pointer {
+                        pointer.set_cursor(serial, None, 0, 0);
+                        log::debug!("Cursor hidden on surface enter");
+                    }
+                }
+
                 // Find which monitor this surface belongs to
                 let monitor_idx = state.layer_surfaces.iter()
                     .find(|ls| ls.surface == surface)
@@ -810,11 +823,11 @@ impl Dispatch<WlPointer, ()> for AppState {
                     let delta = -value / 120.0; // Normalize scroll delta
                     state.zoom = (state.zoom + delta * state.zoom_speed).clamp(0.01, 1.0);
                     state.renderer.set_zoom(state.zoom);
-                    log::info!("Zoom adjusted to {:.2}x (zoom factor: {:.2})", 1.0 / state.zoom, state.zoom);
+                    log::debug!("Zoom adjusted to {:.2}x (zoom factor: {:.2})", 1.0 / state.zoom, state.zoom);
 
                     // Exit when zoomed all the way out (no magnification)
                     if state.zoom >= 1.0 {
-                        log::info!("Zoomed to 1.0 (no magnification), clearing overlay and exiting...");
+                        log::debug!("Zoomed to 1.0 (no magnification), clearing overlay and exiting...");
 
                         // Clear all overlays first
                         for layer_surface in &mut state.layer_surfaces {
