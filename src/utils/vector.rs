@@ -1,16 +1,38 @@
+//! 2D vector mathematics.
+//!
+//! Provides a Vector2D type with common arithmetic operations for
+//! coordinate calculations and transformations.
+
 use std::ops::{Add, Sub, Mul, Div, AddAssign, SubAssign, MulAssign, DivAssign};
 
+/// A 2D vector with floating-point components.
+///
+/// Used throughout the application for coordinates, sizes, and offsets.
+/// Supports standard arithmetic operations (add, subtract, multiply, divide)
+/// and provides utility methods for rounding and vector operations.
+///
+/// # Examples
+///
+/// ```ignore
+/// let pos = Vector2D::new(100.5, 200.7);
+/// let size = Vector2D::new(50.0, 100.0);
+/// let center = pos + size / 2.0;
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vector2D {
+    /// X component (horizontal)
     pub x: f64,
+    /// Y component (vertical)
     pub y: f64,
 }
 
 impl Vector2D {
+    /// Create a new vector with the given components.
     pub fn new(x: f64, y: f64) -> Self {
         Self { x, y }
     }
 
+    /// Round components down to nearest integer.
     pub fn floor(self) -> Self {
         Self {
             x: self.x.floor(),
@@ -18,6 +40,7 @@ impl Vector2D {
         }
     }
 
+    #[allow(dead_code)]
     pub fn round(self) -> Self {
         Self {
             x: self.x.round(),
@@ -25,6 +48,7 @@ impl Vector2D {
         }
     }
 
+    #[allow(dead_code)]
     pub fn ceil(self) -> Self {
         Self {
             x: self.x.ceil(),
@@ -32,10 +56,12 @@ impl Vector2D {
         }
     }
 
+    #[allow(dead_code)]
     pub fn length(self) -> f64 {
         (self.x * self.x + self.y * self.y).sqrt()
     }
 
+    #[allow(dead_code)]
     pub fn normalize(self) -> Self {
         let len = self.length();
         if len == 0.0 {

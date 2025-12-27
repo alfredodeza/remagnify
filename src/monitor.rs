@@ -8,12 +8,14 @@ pub struct Monitor {
     pub wayland_name: u32,
     pub size: Vector2D,
     pub scale: i32,
+    #[allow(dead_code)]
     pub transform: Transform,
     pub ready: bool,
 
     // Screen capture buffer
     pub screen_buffer: Option<PoolBuffer>,
     pub screen_buffer_format: u32,
+    #[allow(dead_code)]
     pub screen_flags: u32,
 
     // Layer surface index

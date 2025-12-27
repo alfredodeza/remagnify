@@ -18,6 +18,7 @@ pub struct Magnifier {
 }
 
 impl Magnifier {
+    #[allow(dead_code)]
     pub fn get_running(&self) -> Arc<AtomicBool> {
         self.running.clone()
     }
@@ -531,7 +532,7 @@ impl Dispatch<WlShm, ()> for AppState {
 
 impl Dispatch<WlSeat, ()> for AppState {
     fn event(
-        state: &mut Self,
+        _state: &mut Self,
         seat: &WlSeat,
         event: <WlSeat as wayland_client::Proxy>::Event,
         _: &(),
@@ -667,7 +668,7 @@ impl Dispatch<WlKeyboard, ()> for AppState {
 impl Dispatch<WlPointer, ()> for AppState {
     fn event(
         state: &mut Self,
-        pointer: &WlPointer,
+        _pointer: &WlPointer,
         event: <WlPointer as wayland_client::Proxy>::Event,
         _: &(),
         _: &Connection,
@@ -681,7 +682,7 @@ impl Dispatch<WlPointer, ()> for AppState {
             Event::Enter { surface, surface_x, surface_y, .. } => {
                 // Find which monitor this surface belongs to
                 let monitor_idx = state.layer_surfaces.iter()
-                    .find(|ls| &ls.surface == &surface)
+                    .find(|ls| ls.surface == surface)
                     .map(|ls| ls.monitor_idx);
 
                 if let Some(idx) = monitor_idx {

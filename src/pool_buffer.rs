@@ -1,24 +1,38 @@
+//! Shared memory buffer management for Wayland.
+//!
+//! This module handles the creation and management of shared memory buffers
+//! used for zero-copy rendering with the Wayland compositor. Buffers are
+//! memory-mapped files in XDG_RUNTIME_DIR.
+
 use crate::utils::Vector2D;
 use anyhow::{Context, Result};
 use cairo::{Context as CairoContext, Format, ImageSurface};
 use nix::fcntl::{fcntl, FcntlArg, FdFlag};
 use nix::sys::mman::{mmap, munmap, MapFlags, ProtFlags};
-use nix::unistd::{close, ftruncate};
+use nix::unistd::ftruncate;
 use std::num::NonZeroUsize;
-use std::os::unix::io::{AsFd, BorrowedFd, RawFd};
+use std::os::unix::io::{AsFd, RawFd};
 use wayland_client::protocol::{wl_buffer::WlBuffer, wl_shm::WlShm};
 use wayland_client::QueueHandle;
 
+/// A memory-mapped shared buffer for Wayland rendering.
+///
+/// PoolBuffer manages a shared memory region that can be used by both
+/// the application and the Wayland compositor for zero-copy rendering.
+/// The buffer is backed by a temporary file in XDG_RUNTIME_DIR and is
+/// automatically cleaned up when dropped.
 pub struct PoolBuffer {
     pub buffer: WlBuffer,
     pub data: *mut u8,
     pub size: usize,
     pub stride: u32,
     pub pixel_size: Vector2D,
+    #[allow(dead_code)]
     pub format: u32,
     pub busy: bool,
 
     // Padded buffer for 24-bit formats
+    #[allow(dead_code)]
     pub padded_data: Option<Vec<u8>>,
 
     // Cairo surface (created on-demand)
@@ -29,6 +43,28 @@ pub struct PoolBuffer {
 }
 
 impl PoolBuffer {
+    /// Create a new shared memory buffer.
+    ///
+    /// Creates a memory-mapped file in XDG_RUNTIME_DIR and sets up a Wayland
+    /// buffer that shares this memory with the compositor.
+    ///
+    /// # Arguments
+    ///
+    /// * `pixel_size` - Width and height in pixels
+    /// * `format` - Pixel format (e.g., ARGB8888)
+    /// * `stride` - Bytes per row
+    /// * `shm` - Wayland shared memory manager
+    /// * `qh` - Wayland event queue handle
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(PoolBuffer)` - Successfully created buffer
+    /// * `Err` - Failed to create shared memory file or buffer
+    ///
+    /// # Safety
+    ///
+    /// Uses unsafe mmap and file descriptor operations, but all are properly
+    /// encapsulated and cleaned up via the Drop trait.
     pub fn new<T>(
         pixel_size: Vector2D,
         format: u32,
@@ -96,7 +132,15 @@ impl PoolBuffer {
         })
     }
 
-    /// Get or create a Cairo surface for this buffer
+    /// Get or create a Cairo surface for this buffer.
+    ///
+    /// Creates a Cairo ImageSurface on first call and caches it for subsequent calls.
+    /// The surface provides direct access to the buffer's pixel data.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(&ImageSurface)` - Cairo surface wrapping the buffer data
+    /// * `Err` - Cairo surface creation failed
     pub fn get_cairo_surface(&mut self) -> Result<&ImageSurface> {
         if self.cairo_surface.is_none() {
             let surface = unsafe {
@@ -114,13 +158,21 @@ impl PoolBuffer {
         Ok(self.cairo_surface.as_ref().unwrap())
     }
 
-    /// Create a Cairo context for drawing
+    /// Create a Cairo context for drawing.
+    ///
+    /// Convenience method that creates a Cairo context from the buffer's surface.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(CairoContext)` - Context ready for drawing operations
+    /// * `Err` - Context creation failed
     pub fn create_cairo_context(&mut self) -> Result<CairoContext> {
         let surface = self.get_cairo_surface()?;
         Ok(CairoContext::new(surface)?)
     }
 
     /// Mark buffer as busy
+    #[allow(dead_code)]
     pub fn set_busy(&mut self, busy: bool) {
         self.busy = busy;
     }
@@ -183,6 +235,7 @@ fn create_shm_file(size: usize) -> Result<(RawFd, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nix::unistd::close;
 
     #[test]
     fn test_create_shm_file() {

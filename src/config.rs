@@ -1,24 +1,37 @@
+//! Configuration management and CLI argument parsing.
+//!
+//! This module handles all configuration options for remagnify, including
+//! CLI argument parsing, validation, and default values.
+
 use crate::utils::Vector2D;
 use clap::{Parser, ValueEnum};
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
+/// Magnifier movement mode.
+///
+/// Determines how the magnifying frame follows the cursor.
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
 pub enum MoveType {
+    /// Magnifier moves relative to cursor movement (for precise positioning).
     Corner,
+    /// Magnifier directly follows the cursor position (default).
+    #[default]
     Cursor,
 }
 
-impl Default for MoveType {
-    fn default() -> Self {
-        Self::Cursor
-    }
-}
-
+/// Application configuration.
+///
+/// Contains all validated configuration options for the magnifier.
+/// Values are clamped to safe ranges during construction from CLI args.
 #[derive(Debug, Clone)]
 pub struct Config {
+    #[allow(dead_code)]
     pub move_type: MoveType,
     pub size: Vector2D,
+    #[allow(dead_code)]
     pub render_inactive: bool,
+    #[allow(dead_code)]
     pub no_fractional: bool,
+    #[allow(dead_code)]
     pub continuous_capture: bool,
     pub zoom_speed: f64,
     pub exit_delay_ms: u64,
@@ -38,6 +51,9 @@ impl Default for Config {
     }
 }
 
+/// Command-line interface arguments.
+///
+/// Parsed using clap. All arguments are validated and converted to a Config.
 #[derive(Parser)]
 #[command(name = "remagnify")]
 #[command(about = "A wlroots-compatible Wayland magnifier", long_about = None)]
@@ -80,6 +96,23 @@ pub struct Cli {
     pub verbose: bool,
 }
 
+/// Parse a size string in the format "WIDTHxHEIGHT".
+///
+/// # Arguments
+///
+/// * `s` - String in format "300x150" or similar
+///
+/// # Returns
+///
+/// * `Ok(Vector2D)` - Parsed size with positive dimensions
+/// * `Err(String)` - If format is invalid or dimensions are negative/zero
+///
+/// # Examples
+///
+/// ```ignore
+/// let size = parse_size("300x150")?;
+/// assert_eq!(size, Vector2D::new(300.0, 150.0));
+/// ```
 fn parse_size(s: &str) -> Result<Vector2D, String> {
     let parts: Vec<&str> = s.split('x').collect();
     if parts.len() != 2 {
@@ -101,20 +134,32 @@ fn parse_size(s: &str) -> Result<Vector2D, String> {
 }
 
 impl Config {
+    /// Create a Config from CLI arguments.
+    ///
+    /// Validates and clamps all values to safe ranges:
+    /// - zoom_speed: clamped to 0.001..=1.0
+    /// - exit_delay_ms: clamped to 0..=5000
+    ///
+    /// # Arguments
+    ///
+    /// * `cli` - Parsed command-line arguments
+    ///
+    /// # Returns
+    ///
+    /// A Config with validated values
     pub fn from_cli(cli: Cli) -> Self {
-        let mut config = Config::default();
-        config.move_type = cli.move_type;
-        if let Some(size) = cli.size {
-            config.size = size;
+        Config {
+            move_type: cli.move_type,
+            size: cli.size.unwrap_or_else(|| Config::default().size),
+            render_inactive: cli.render_inactive,
+            no_fractional: cli.no_fractional,
+            continuous_capture: cli.continuous,
+            zoom_speed: cli.zoom_speed.clamp(0.001, 1.0),
+            exit_delay_ms: cli.exit_delay.min(5000),
         }
-        config.render_inactive = cli.render_inactive;
-        config.no_fractional = cli.no_fractional;
-        config.continuous_capture = cli.continuous;
-        config.zoom_speed = cli.zoom_speed.max(0.001).min(1.0); // Clamp to reasonable range
-        config.exit_delay_ms = cli.exit_delay.min(5000); // Max 5 seconds
-        config
     }
 
+    #[allow(dead_code)]
     pub fn log_level(&self, cli: &Cli) -> log::LevelFilter {
         if cli.quiet {
             log::LevelFilter::Error
@@ -137,5 +182,79 @@ mod tests {
         assert!(parse_size("invalid").is_err());
         assert!(parse_size("300").is_err());
         assert!(parse_size("-300x150").is_err());
+    }
+
+    #[test]
+    fn test_config_from_cli() {
+        let cli = Cli {
+            move_type: MoveType::Corner,
+            size: Some(Vector2D::new(400.0, 200.0)),
+            render_inactive: true,
+            no_fractional: true,
+            continuous: false,
+            zoom_speed: 0.1,
+            exit_delay: 500,
+            quiet: false,
+            verbose: false,
+        };
+
+        let config = Config::from_cli(cli);
+        assert_eq!(config.size.x, 400.0);
+        assert_eq!(config.size.y, 200.0);
+        assert_eq!(config.zoom_speed, 0.1);
+        assert_eq!(config.exit_delay_ms, 500);
+    }
+
+    #[test]
+    fn test_config_zoom_speed_clamping() {
+        // Test that zoom speed is clamped to valid range
+        let cli_too_low = Cli {
+            move_type: MoveType::Cursor,
+            size: None,
+            render_inactive: false,
+            no_fractional: false,
+            continuous: true,
+            zoom_speed: -0.5, // Invalid
+            exit_delay: 200,
+            quiet: false,
+            verbose: false,
+        };
+
+        let config = Config::from_cli(cli_too_low);
+        assert!(config.zoom_speed >= 0.001); // Should be clamped to minimum
+
+        let cli_too_high = Cli {
+            move_type: MoveType::Cursor,
+            size: None,
+            render_inactive: false,
+            no_fractional: false,
+            continuous: true,
+            zoom_speed: 5.0, // Invalid
+            exit_delay: 200,
+            quiet: false,
+            verbose: false,
+        };
+
+        let config = Config::from_cli(cli_too_high);
+        assert!(config.zoom_speed <= 1.0); // Should be clamped to maximum
+    }
+
+    #[test]
+    fn test_config_exit_delay_clamping() {
+        // Test that exit delay is clamped to maximum
+        let cli = Cli {
+            move_type: MoveType::Cursor,
+            size: None,
+            render_inactive: false,
+            no_fractional: false,
+            continuous: true,
+            zoom_speed: 0.05,
+            exit_delay: 10000, // Too high
+            quiet: false,
+            verbose: false,
+        };
+
+        let config = Config::from_cli(cli);
+        assert!(config.exit_delay_ms <= 5000); // Should be clamped to 5000ms max
     }
 }

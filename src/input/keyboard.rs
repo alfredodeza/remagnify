@@ -49,10 +49,6 @@ impl Keyboard {
             return None;
         }
 
-        if let Some(xkb_state) = &self.xkb_state {
-            Some(xkb_state.key_get_one_sym((key + 8).into()))
-        } else {
-            None
-        }
+        self.xkb_state.as_ref().map(|xkb_state| xkb_state.key_get_one_sym((key + 8).into()))
     }
 }

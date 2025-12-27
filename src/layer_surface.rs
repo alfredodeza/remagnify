@@ -7,9 +7,11 @@ pub struct LayerSurface {
     pub monitor_idx: usize,
     pub surface: WlSurface,
     pub layer_surface: Option<ZwlrLayerSurfaceV1>,
+    #[allow(dead_code)]
     pub fractional_scale_value: f64,
     pub configured: bool,
     pub ack_serial: u32,
+    #[allow(dead_code)]
     pub working: bool,
 
     // Double buffering
@@ -78,6 +80,7 @@ impl LayerSurface {
         }
     }
 
+    #[allow(dead_code)]
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
     }

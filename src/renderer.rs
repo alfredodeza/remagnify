@@ -1,26 +1,73 @@
+//! Rendering pipeline for magnified screen content.
+//!
+//! This module handles the Cairo-based rendering of the magnifier overlay,
+//! including background rendering, magnified region rendering, and outline drawing.
+
 use crate::pool_buffer::PoolBuffer;
 use crate::utils::Vector2D;
 use anyhow::Result;
 use cairo::{Filter, Matrix, SurfacePattern};
 
+/// Renderer for magnified content.
+///
+/// Manages the zoom level and renders the magnified view using Cairo.
+/// The rendering pipeline consists of three stages:
+/// 1. Background: Full screen capture at reduced size
+/// 2. Magnified region: Zoomed section around the pointer
+/// 3. Outline: Visual frame around the magnified area
 pub struct Renderer {
+    /// Current zoom level (0.01 = 1%, 1.0 = 100%)
     pub zoom: f64,
 }
 
 impl Renderer {
+    /// Create a new renderer with default zoom level (0.5 = 50%).
     pub fn new() -> Self {
         Self { zoom: 0.5 }
     }
 
+    /// Set the zoom level.
+    ///
+    /// The zoom value is automatically clamped to the range 0.01..=1.0.
+    ///
+    /// # Arguments
+    ///
+    /// * `zoom` - Desired zoom level (will be clamped to 0.01..=1.0)
     pub fn set_zoom(&mut self, zoom: f64) {
         self.zoom = zoom.clamp(0.01, 1.0);
     }
 
+    /// Adjust the zoom level by a delta value.
+    ///
+    /// The resulting zoom value is automatically clamped to the range 0.01..=1.0.
+    ///
+    /// # Arguments
+    ///
+    /// * `delta` - Amount to add to current zoom (negative to zoom out)
+    #[allow(dead_code)]
     pub fn adjust_zoom(&mut self, delta: f64) {
         self.zoom = (self.zoom + delta).clamp(0.01, 1.0);
     }
 
-    /// Render the magnified view onto the output buffer
+    /// Render the magnified view onto the output buffer.
+    ///
+    /// This is the main rendering function that orchestrates the three-stage
+    /// rendering pipeline:
+    /// 1. Render background (full screen capture)
+    /// 2. Render magnified region centered on pointer
+    /// 3. Draw outline around magnified area
+    ///
+    /// # Arguments
+    ///
+    /// * `output_buffer` - Destination buffer for rendering
+    /// * `screen_buffer` - Source screen capture buffer
+    /// * `position` - Center position of magnifier in output coordinates
+    /// * `magnifier_size` - Size of the magnified region
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Rendering succeeded
+    /// * `Err` - Cairo rendering error
     pub fn render_surface(
         &self,
         output_buffer: &mut PoolBuffer,
@@ -151,5 +198,62 @@ impl Renderer {
 impl Default for Renderer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_renderer_default_zoom() {
+        let renderer = Renderer::new();
+        assert_eq!(renderer.zoom, 0.5);
+    }
+
+    #[test]
+    fn test_set_zoom_clamping() {
+        let mut renderer = Renderer::new();
+
+        // Test valid zoom
+        renderer.set_zoom(0.75);
+        assert_eq!(renderer.zoom, 0.75);
+
+        // Test zoom too low - should clamp to 0.01
+        renderer.set_zoom(-0.5);
+        assert_eq!(renderer.zoom, 0.01);
+
+        // Test zoom too high - should clamp to 1.0
+        renderer.set_zoom(5.0);
+        assert_eq!(renderer.zoom, 1.0);
+
+        // Test edge cases
+        renderer.set_zoom(0.01);
+        assert_eq!(renderer.zoom, 0.01);
+
+        renderer.set_zoom(1.0);
+        assert_eq!(renderer.zoom, 1.0);
+    }
+
+    #[test]
+    fn test_adjust_zoom_clamping() {
+        let mut renderer = Renderer::new();
+        assert_eq!(renderer.zoom, 0.5);
+
+        // Test positive adjustment
+        renderer.adjust_zoom(0.2);
+        assert!((renderer.zoom - 0.7).abs() < 1e-10);
+
+        // Test negative adjustment
+        renderer.adjust_zoom(-0.3);
+        assert!((renderer.zoom - 0.4).abs() < 1e-10);
+
+        // Test adjustment that would exceed max - should clamp
+        renderer.adjust_zoom(1.0);
+        assert_eq!(renderer.zoom, 1.0);
+
+        // Test adjustment that would go below min - should clamp
+        renderer.adjust_zoom(-2.0);
+        assert_eq!(renderer.zoom, 0.01);
     }
 }
