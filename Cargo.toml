@@ -1,0 +1,43 @@
+[package]
+name = "remagnify"
+version = "0.1.0"
+edition = "2021"
+authors = ["Alfredo <alfredo@example.com>"]
+description = "A wlroots-compatible Wayland magnifier written in Rust"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/remagnify"
+keywords = ["wayland", "magnifier", "wlroots", "accessibility"]
+categories = ["gui", "accessibility"]
+
+[dependencies]
+# Wayland
+wayland-client = "0.31"
+wayland-protocols = { version = "0.31", features = ["client", "unstable"] }
+wayland-protocols-wlr = { version = "0.2", features = ["client"] }
+
+# Rendering
+cairo-rs = { version = "0.18", features = ["png"] }
+pango = "0.18"
+pangocairo = "0.18"
+
+# Input
+xkbcommon = "0.7"
+
+# System
+nix = { version = "0.27", features = ["mman", "fs"] }
+memmap2 = "0.9"
+
+# CLI & Utils
+clap = { version = "4", features = ["derive"] }
+log = "0.4"
+env_logger = "0.11"
+anyhow = "1.0"
+thiserror = "1.0"
+ctrlc = "3.4"
+
+[build-dependencies]
+wayland-scanner = "0.31"
+
+[[bin]]
+name = "remagnify"
+path = "src/main.rs"
