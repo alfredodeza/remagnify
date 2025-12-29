@@ -7,7 +7,6 @@ pub struct LayerSurface {
     pub monitor_idx: usize,
     pub surface: WlSurface,
     pub layer_surface: Option<ZwlrLayerSurfaceV1>,
-    #[allow(dead_code)]
     pub fractional_scale_value: f64,
     pub configured: bool,
     pub ack_serial: u32,
@@ -22,7 +21,7 @@ pub struct LayerSurface {
     pub rendered: bool,
     pub frame_callback: Option<WlCallback>,
 
-    // Monitor size
+    // Monitor size (physical pixels from wl_output mode)
     pub monitor_size: Vector2D,
     pub monitor_scale: i32,
 }
@@ -33,7 +32,7 @@ impl LayerSurface {
             monitor_idx,
             surface,
             layer_surface: None,
-            fractional_scale_value: 1.0,
+            fractional_scale_value: monitor_scale as f64,
             configured: false,
             ack_serial: 0,
             working: false,
@@ -45,6 +44,14 @@ impl LayerSurface {
             monitor_size,
             monitor_scale,
         }
+    }
+
+    /// Get the logical size of the surface based on physical size and fractional scale
+    pub fn get_logical_size(&self) -> Vector2D {
+        Vector2D::new(
+            self.monitor_size.x / self.fractional_scale_value,
+            self.monitor_size.y / self.fractional_scale_value,
+        )
     }
 
     pub fn get_available_buffer(&mut self) -> Option<&mut PoolBuffer> {
@@ -72,7 +79,18 @@ impl LayerSurface {
             self.surface
                 .damage_buffer(0, 0, i32::MAX, i32::MAX);
             self.surface.attach(Some(&buffer.buffer), 0, 0);
-            self.surface.set_buffer_scale(self.monitor_scale);
+
+            // For fractional scaling, we create buffers at logical size, so buffer_scale=1
+            // The compositor will handle the fractional scaling to physical pixels
+            // For integer scaling, we still use the integer scale value
+            if (self.fractional_scale_value - self.monitor_scale as f64).abs() < 0.01 {
+                // Integer scale, use it directly
+                self.surface.set_buffer_scale(self.monitor_scale);
+            } else {
+                // Fractional scale, buffer is at logical size so scale=1
+                self.surface.set_buffer_scale(1);
+            }
+
             self.surface.commit();
 
             self.dirty = false;

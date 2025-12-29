@@ -142,14 +142,22 @@ impl Magnifier {
             .roundtrip(&mut state)
             .context("Failed to configure monitors and seat")?;
 
+        // Apply fractional scale override if provided in config
+        if let Some(config_scale) = self.config.scale {
+            for monitor in state.monitors.iter_mut() {
+                monitor.set_fractional_scale(config_scale);
+            }
+        }
+
         // Log monitor info
         for (idx, monitor) in state.monitors.iter().enumerate() {
             log::info!(
-                "Monitor {}: {}x{} scale={} ({})",
+                "Monitor {}: {}x{} scale={} fractional={} ({})",
                 idx,
                 monitor.size.x as i32,
                 monitor.size.y as i32,
                 monitor.scale,
+                monitor.fractional_scale,
                 monitor.name
             );
         }
@@ -214,6 +222,7 @@ impl Magnifier {
                 monitor.size,
                 monitor.scale,
             );
+            ls.fractional_scale_value = monitor.fractional_scale;
             ls.layer_surface = Some(layer_surface);
             state.layer_surfaces.push(ls);
             monitor.layer_surface_idx = Some(idx);
@@ -235,9 +244,20 @@ impl Magnifier {
         let shm = state.shm.as_ref().unwrap();
 
         for layer_surface in &mut state.layer_surfaces {
-            let pixel_size = layer_surface.monitor_size;
+            // Use logical size for buffer creation (physical size / fractional scale)
+            let pixel_size = layer_surface.get_logical_size();
             let stride = (pixel_size.x as u32) * 4; // ARGB32 = 4 bytes per pixel
             let format = wayland_client::protocol::wl_shm::Format::Argb8888 as u32;
+
+            log::debug!(
+                "Creating buffer for layer surface {}: logical size {}x{} (physical {}x{}, scale {})",
+                layer_surface.monitor_idx,
+                pixel_size.x as i32,
+                pixel_size.y as i32,
+                layer_surface.monitor_size.x as i32,
+                layer_surface.monitor_size.y as i32,
+                layer_surface.fractional_scale_value
+            );
 
             // Create both buffers
             for i in 0..2 {
@@ -400,7 +420,8 @@ impl AppState {
             // Create new buffers if needed
             log::debug!("Creating output buffers for layer surface {}", monitor_idx);
 
-            let pixel_size = layer_surface.monitor_size;
+            // Use logical size for buffer creation (physical size / fractional scale)
+            let pixel_size = layer_surface.get_logical_size();
             let stride = (pixel_size.x as u32) * 4; // ARGB32 = 4 bytes per pixel
             let format = wayland_client::protocol::wl_shm::Format::Argb8888 as u32;
 
@@ -699,8 +720,10 @@ impl Dispatch<WlPointer, ()> for AppState {
                     .map(|ls| ls.monitor_idx);
 
                 if let Some(idx) = monitor_idx {
-                    // Get monitor size for coordinate conversion
-                    let monitor_size = state.monitors.get(idx).map(|m| m.size)
+                    // Get monitor logical size for coordinate conversion
+                    // Pointer coordinates are in logical space
+                    let monitor_size = state.monitors.get(idx)
+                        .map(|m| m.get_logical_size())
                         .unwrap_or_else(|| Vector2D::new(1920.0, 1080.0));
 
                     // Hyprland gives global compositor coordinates instead of surface-local
@@ -780,7 +803,9 @@ impl Dispatch<WlPointer, ()> for AppState {
 
                 // Convert coordinates (handle Hyprland's global coordinates quirk)
                 if let Some(monitor_idx) = state.active_monitor {
-                    let monitor_size = state.monitors.get(monitor_idx).map(|m| m.size)
+                    // Pointer coordinates are in logical space
+                    let monitor_size = state.monitors.get(monitor_idx)
+                        .map(|m| m.get_logical_size())
                         .unwrap_or_else(|| Vector2D::new(1920.0, 1080.0));
 
                     let local_x = if surface_x < 0.0 {

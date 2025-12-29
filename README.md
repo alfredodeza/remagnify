@@ -123,7 +123,9 @@ remagnify [OPTIONS]
 - `-s, --size <WIDTHxHEIGHT>` - Magnifier window size (default: `300x150`)
 - `-r, --render-inactive` - Render inactive displays as frozen snapshots
 - `-c, --continuous <BOOL>` - Enable continuous capture for live updates (default: `true`)
-- `-t, --no-fractional` - Disable fractional scaling
+- `-z, --zoom-speed <FLOAT>` - Zoom speed multiplier (default: `0.05`, range: `0.001-1.0`)
+- `-e, --exit-delay <MS>` - Exit delay in milliseconds after zooming out (default: `200`, max: `5000`)
+- `--scale <FLOAT>` - Override monitor scale for fractional scaling (e.g., `1.5` for 150%)
 - `--show-cursor` - Show cursor while magnifying (cursor is hidden by default)
 - `-q, --quiet` - Quiet mode (errors only)
 - `-v, --verbose` - Verbose logging
@@ -151,6 +153,53 @@ remagnify --show-cursor
 # Verbose logging
 remagnify --verbose
 ```
+
+### Fractional Scaling Support
+
+If you're using **Hyprland with fractional scaling** (e.g., 1.25x, 1.5x, 1.75x), you need to specify the scale manually using the `--scale` option. This is necessary because Wayland's `wl_output` protocol only reports integer scales, but Hyprland uses true fractional scaling.
+
+**When to use `--scale`:**
+- ✅ You're using Hyprland with fractional monitor scaling
+- ✅ The magnifier looks cut off or misaligned
+- ✅ Your monitor is configured with a non-integer scale (check `hyprctl monitors`)
+
+**When NOT needed:**
+- ❌ Using integer scaling (1x, 2x, 3x) - auto-detected correctly
+- ❌ Using compositors other than Hyprland that don't use fractional scaling
+
+#### Hyprland Fractional Scaling Examples
+
+```bash
+# Check your current monitor scale
+hyprctl monitors | grep scale
+
+# For 1.25x scaling (125%)
+remagnify --scale 1.25
+
+# For 1.5x scaling (150%) - most common for 1920x1200 displays
+remagnify --scale 1.5 --size 1200x600 -z 0.2
+
+# For 1.75x scaling (175%)
+remagnify --scale 1.75
+
+# Add to your Hyprland config for 1.5x scaled monitor
+bind = SUPER, M, exec, pkill remagnify || remagnify --scale 1.5 -z 0.2 --exit-delay 500
+```
+
+#### Why This Is Needed
+
+Hyprland's fractional scaling works by:
+1. Rendering applications at logical size (e.g., 1280x800 for a 1920x1200 monitor at 1.5x)
+2. Scaling the output to physical pixels with interpolation
+
+Remagnify needs to know the true fractional scale to:
+- Create buffers at the correct logical resolution
+- Properly scale captured screen content
+- Align the magnifier frame correctly
+
+Without `--scale`, the app falls back to the integer scale reported by Wayland, which may cause rendering issues on fractionally-scaled displays.
+
+**Tip:** Run `remagnify --scale 1.5 --verbose` to see detailed scaling information in the logs.
 
 ## How It Works
 

@@ -8,6 +8,7 @@ pub struct Monitor {
     pub wayland_name: u32,
     pub size: Vector2D,
     pub scale: i32,
+    pub fractional_scale: f64, // Actual fractional scale (e.g., 1.5)
     #[allow(dead_code)]
     pub transform: Transform,
     pub ready: bool,
@@ -30,6 +31,7 @@ impl Monitor {
             wayland_name,
             size: Vector2D::default(),
             scale: 1,
+            fractional_scale: 1.0,
             transform: Transform::Normal,
             ready: false,
             screen_buffer: None,
@@ -37,6 +39,14 @@ impl Monitor {
             screen_flags: 0,
             layer_surface_idx: None,
         }
+    }
+
+    /// Get the logical size of the monitor based on physical size and fractional scale
+    pub fn get_logical_size(&self) -> Vector2D {
+        Vector2D::new(
+            self.size.x / self.fractional_scale,
+            self.size.y / self.fractional_scale,
+        )
     }
 
     pub fn set_geometry(&mut self, x: i32, y: i32, width: i32, height: i32) {
@@ -63,7 +73,23 @@ impl Monitor {
 
     pub fn set_scale(&mut self, scale: i32) {
         self.scale = scale;
-        log::debug!("Monitor {} scale: {}", self.wayland_name, scale);
+        self.fractional_scale = scale as f64;
+        log::debug!("Monitor {} scale: {} (fractional: {})",
+            self.wayland_name, scale, self.fractional_scale);
+    }
+
+    /// Override the fractional scale value (e.g., from CLI --scale option).
+    /// Use this when the integer scale from wl_output doesn't match the actual scaling.
+    pub fn set_fractional_scale(&mut self, fractional_scale: f64) {
+        self.fractional_scale = fractional_scale;
+        if (self.fractional_scale - self.scale as f64).abs() > 0.01 {
+            log::info!(
+                "Monitor {} using fractional scale: {} (wl_output reported: {})",
+                self.wayland_name,
+                self.fractional_scale,
+                self.scale
+            );
+        }
     }
 
     pub fn set_name(&mut self, name: String) {
@@ -81,5 +107,70 @@ impl Monitor {
             self.size.y,
             self.scale
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_logical_size_fractional_scale() {
+        // Test logical size calculation with fractional scaling (1.5x)
+        let size = Vector2D::new(1920.0, 1200.0);
+        let scale = 1.5;
+
+        let logical_x = size.x / scale;
+        let logical_y = size.y / scale;
+
+        assert!((logical_x - 1280.0).abs() < 0.01);
+        assert!((logical_y - 800.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_get_logical_size_integer_scale() {
+        // Test logical size calculation with integer scaling (2x)
+        let size = Vector2D::new(1920.0, 1080.0);
+        let scale = 2.0;
+
+        let logical_x = size.x / scale;
+        let logical_y = size.y / scale;
+
+        assert_eq!(logical_x, 960.0);
+        assert_eq!(logical_y, 540.0);
+    }
+
+    #[test]
+    fn test_get_logical_size_no_scale() {
+        // Test logical size calculation with no scaling (1x)
+        let size = Vector2D::new(1920.0, 1080.0);
+        let scale = 1.0;
+
+        let logical_x = size.x / scale;
+        let logical_y = size.y / scale;
+
+        assert_eq!(logical_x, 1920.0);
+        assert_eq!(logical_y, 1080.0);
+    }
+
+    #[test]
+    fn test_fractional_scale_calculations() {
+        // Test various fractional scales
+        let test_cases = vec![
+            (1920.0, 1200.0, 1.25, 1536.0, 960.0),
+            (2560.0, 1440.0, 1.5, 1706.67, 960.0),
+            (3840.0, 2160.0, 2.0, 1920.0, 1080.0),
+        ];
+
+        for (width, height, scale, expected_w, expected_h) in test_cases {
+            let size = Vector2D::new(width, height);
+            let logical_w = size.x / scale;
+            let logical_h = size.y / scale;
+
+            assert!((logical_w - expected_w).abs() < 1.0,
+                "Width mismatch for {}x{} at {}x scale", width, height, scale);
+            assert!((logical_h - expected_h).abs() < 1.0,
+                "Height mismatch for {}x{} at {}x scale", width, height, scale);
+        }
     }
 }

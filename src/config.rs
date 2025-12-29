@@ -30,12 +30,13 @@ pub struct Config {
     #[allow(dead_code)]
     pub render_inactive: bool,
     #[allow(dead_code)]
-    pub no_fractional: bool,
-    #[allow(dead_code)]
     pub continuous_capture: bool,
     pub zoom_speed: f64,
     pub exit_delay_ms: u64,
     pub hide_cursor: bool,
+    /// Fractional scale override (e.g., 1.5 for 150% scaling).
+    /// If None, uses the integer scale from wl_output.
+    pub scale: Option<f64>,
 }
 
 impl Default for Config {
@@ -44,11 +45,11 @@ impl Default for Config {
             move_type: MoveType::Cursor,
             size: Vector2D::new(300.0, 150.0),
             render_inactive: false,
-            no_fractional: false,
             continuous_capture: true,
             zoom_speed: 0.05, // Default zoom speed (5% per scroll notch)
             exit_delay_ms: 200, // Default 200ms delay before exit
             hide_cursor: true, // Hide cursor by default
+            scale: None, // Auto-detect from wl_output
         }
     }
 }
@@ -73,10 +74,6 @@ pub struct Cli {
     #[arg(short, long)]
     pub render_inactive: bool,
 
-    /// Disable fractional scaling
-    #[arg(short = 't', long)]
-    pub no_fractional: bool,
-
     /// Enable continuous capture (live updates)
     #[arg(short, long, default_value = "true")]
     pub continuous: bool,
@@ -100,6 +97,12 @@ pub struct Cli {
     /// Show cursor (cursor is hidden by default)
     #[arg(long)]
     pub show_cursor: bool,
+
+    /// Override monitor scale (e.g., 1.5 for 150% scaling).
+    /// Use this for fractional scaling if auto-detection doesn't work.
+    /// If not specified, uses the integer scale from wl_output.
+    #[arg(long)]
+    pub scale: Option<f64>,
 }
 
 /// Parse a size string in the format "WIDTHxHEIGHT".
@@ -154,15 +157,28 @@ impl Config {
     ///
     /// A Config with validated values
     pub fn from_cli(cli: Cli) -> Self {
+        // Validate scale if provided
+        let scale = cli.scale.map(|s| {
+            if s <= 0.0 {
+                log::warn!("Scale must be positive, using default");
+                None
+            } else if s > 10.0 {
+                log::warn!("Scale too high (max 10.0), clamping");
+                Some(10.0)
+            } else {
+                Some(s)
+            }
+        }).flatten();
+
         Config {
             move_type: cli.move_type,
             size: cli.size.unwrap_or_else(|| Config::default().size),
             render_inactive: cli.render_inactive,
-            no_fractional: cli.no_fractional,
             continuous_capture: cli.continuous,
             zoom_speed: cli.zoom_speed.clamp(0.001, 1.0),
             exit_delay_ms: cli.exit_delay.min(5000),
             hide_cursor: !cli.show_cursor, // Invert: show_cursor flag disables hiding
+            scale,
         }
     }
 
@@ -197,13 +213,13 @@ mod tests {
             move_type: MoveType::Corner,
             size: Some(Vector2D::new(400.0, 200.0)),
             render_inactive: true,
-            no_fractional: true,
             continuous: false,
             zoom_speed: 0.1,
             exit_delay: 500,
             quiet: false,
             verbose: false,
             show_cursor: false,
+            scale: None,
         };
 
         let config = Config::from_cli(cli);
@@ -212,6 +228,7 @@ mod tests {
         assert_eq!(config.zoom_speed, 0.1);
         assert_eq!(config.exit_delay_ms, 500);
         assert_eq!(config.hide_cursor, true); // Default: cursor hidden
+        assert_eq!(config.scale, None);
     }
 
     #[test]
@@ -221,13 +238,13 @@ mod tests {
             move_type: MoveType::Cursor,
             size: None,
             render_inactive: false,
-            no_fractional: false,
             continuous: true,
             zoom_speed: -0.5, // Invalid
             exit_delay: 200,
             quiet: false,
             verbose: false,
             show_cursor: false,
+            scale: None,
         };
 
         let config = Config::from_cli(cli_too_low);
@@ -237,13 +254,13 @@ mod tests {
             move_type: MoveType::Cursor,
             size: None,
             render_inactive: false,
-            no_fractional: false,
             continuous: true,
             zoom_speed: 5.0, // Invalid
             exit_delay: 200,
             quiet: false,
             verbose: false,
             show_cursor: false,
+            scale: None,
         };
 
         let config = Config::from_cli(cli_too_high);
@@ -257,13 +274,13 @@ mod tests {
             move_type: MoveType::Cursor,
             size: None,
             render_inactive: false,
-            no_fractional: false,
             continuous: true,
             zoom_speed: 0.05,
             exit_delay: 10000, // Too high
             quiet: false,
             verbose: false,
             show_cursor: false,
+            scale: None,
         };
 
         let config = Config::from_cli(cli);
@@ -277,13 +294,13 @@ mod tests {
             move_type: MoveType::Cursor,
             size: None,
             render_inactive: false,
-            no_fractional: false,
             continuous: true,
             zoom_speed: 0.05,
             exit_delay: 200,
             quiet: false,
             verbose: false,
             show_cursor: false, // Default: don't show cursor
+            scale: None,
         };
 
         let config = Config::from_cli(cli_default);
@@ -294,16 +311,70 @@ mod tests {
             move_type: MoveType::Cursor,
             size: None,
             render_inactive: false,
-            no_fractional: false,
             continuous: true,
             zoom_speed: 0.05,
             exit_delay: 200,
             quiet: false,
             verbose: false,
             show_cursor: true, // Explicitly show cursor
+            scale: None,
         };
 
         let config = Config::from_cli(cli_show);
         assert_eq!(config.hide_cursor, false); // Cursor should be visible
+    }
+
+    #[test]
+    fn test_scale_validation() {
+        // Test valid scale
+        let cli_valid = Cli {
+            move_type: MoveType::Cursor,
+            size: None,
+            render_inactive: false,
+            continuous: true,
+            zoom_speed: 0.05,
+            exit_delay: 200,
+            quiet: false,
+            verbose: false,
+            show_cursor: false,
+            scale: Some(1.5),
+        };
+
+        let config = Config::from_cli(cli_valid);
+        assert_eq!(config.scale, Some(1.5));
+
+        // Test scale clamping to maximum
+        let cli_too_high = Cli {
+            move_type: MoveType::Cursor,
+            size: None,
+            render_inactive: false,
+            continuous: true,
+            zoom_speed: 0.05,
+            exit_delay: 200,
+            quiet: false,
+            verbose: false,
+            show_cursor: false,
+            scale: Some(15.0), // Too high
+        };
+
+        let config = Config::from_cli(cli_too_high);
+        assert_eq!(config.scale, Some(10.0)); // Should be clamped to 10.0
+
+        // Test invalid scale (negative)
+        let cli_negative = Cli {
+            move_type: MoveType::Cursor,
+            size: None,
+            render_inactive: false,
+            continuous: true,
+            zoom_speed: 0.05,
+            exit_delay: 200,
+            quiet: false,
+            verbose: false,
+            show_cursor: false,
+            scale: Some(-1.5), // Invalid
+        };
+
+        let config = Config::from_cli(cli_negative);
+        assert_eq!(config.scale, None); // Should be rejected
     }
 }
