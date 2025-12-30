@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="remagnify - A wlroots-compatible Wayland magnifier written in Rust">
+    <title>remagnify - Wayland Screen Magnifier</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+
+        .install-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 4px;
+        }
+
+        .install-box h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .features {
+            margin: 30px 0;
+        }
+
+        .features ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .features li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .links {
+            display: flex;
+            gap: 15px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            background: #764ba2;
+        }
+
+        .btn-secondary:hover {
+            background: #663a8e;
+        }
+
+        footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #666;
+            text-align: center;
+        }
+
+        .copy-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+            transition: background 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: #5568d3;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>remagnify</h1>
+        <p class="subtitle">A wlroots-compatible Wayland screen magnifier written in Rust</p>
+
+        <div class="install-box">
+            <div class="code-header">
+                <h2>Quick Install</h2>
+                <button class="copy-btn" onclick="copyInstallCommand()">Copy</button>
+            </div>
+            <pre><code id="install-cmd">curl -fsSL https://alfredodeza.github.io/remagnify/install | sh</code></pre>
+        </div>
+
+        <div class="features">
+            <h2>Features</h2>
+            <ul>
+                <li>Real-time screen magnification with mouse tracking</li>
+                <li>Adjustable zoom level via scroll wheel (0.01x to 1.0x)</li>
+                <li>Two movement modes: cursor and corner</li>
+                <li>Fractional scaling support for HiDPI displays</li>
+                <li>Multi-monitor support</li>
+                <li>Keyboard shortcut: Press Escape to exit</li>
+            </ul>
+        </div>
+
+        <div class="links">
+            <a href="https://github.com/alfredodeza/remagnify" class="btn">View on GitHub</a>
+            <a href="https://github.com/alfredodeza/remagnify/releases" class="btn btn-secondary">Releases</a>
+        </div>
+
+        <h2>Alternative Installation Methods</h2>
+        <p style="margin: 15px 0;">For Rust developers:</p>
+        <pre><code># Fast binary install
+cargo binstall remagnify
+
+# Or build from source
+cargo install remagnify</code></pre>
+
+        <h2>Quick Start</h2>
+        <pre><code># Start with recommended settings
+remagnify -z 0.2 --exit-delay 500 --size 1200x600
+
+# Add to Hyprland config
+bind = SUPER, M, exec, pkill remagnify || remagnify -z 0.2 --exit-delay 500 --size 1200x600</code></pre>
+
+        <h2>Requirements</h2>
+        <p style="margin: 15px 0;">A wlroots-based Wayland compositor (Hyprland, Sway, etc.) with the following protocols:</p>
+        <ul style="margin-left: 20px;">
+            <li><code>wlr-layer-shell-unstable-v1</code></li>
+            <li><code>wlr-screencopy-unstable-v1</code></li>
+        </ul>
+
+        <footer>
+            <p>Built with Rust | Licensed under MIT OR Apache-2.0</p>
+            <p><a href="https://github.com/alfredodeza/remagnify" style="color: #667eea;">Documentation & Source Code</a></p>
+        </footer>
+    </div>
+
+    <script>
+        function copyInstallCommand() {
+            const cmd = document.getElementById('install-cmd').textContent;
+            navigator.clipboard.writeText(cmd).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>

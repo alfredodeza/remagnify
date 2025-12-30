@@ -101,14 +101,77 @@ The binary will be located at `target/release/remagnify`.
 
 ## Installation
 
+**System dependencies** (required for all installation methods):
+
 ```bash
+# Arch Linux
+sudo pacman -S wayland cairo pango libxkbcommon
+
+# Ubuntu/Debian
+sudo apt install libwayland-client0 libcairo2 libpango-1.0-0 libxkbcommon0
+
+# Fedora
+sudo dnf install wayland cairo pango libxkbcommon
+```
+
+### Option 1: Install Script (Recommended for non-Rust users)
+
+Quick one-liner that works without Rust/Cargo installed:
+
+```bash
+curl -fsSL https://alfredodeza.github.io/remagnify/install | sh
+```
+
+The script automatically:
+- Detects your platform (x86_64 or aarch64 Linux)
+- Downloads the latest pre-built binary from GitHub releases
+- Verifies checksums
+- Installs to `/usr/local/bin` or `~/.local/bin`
+- Checks for system dependencies
+
+### Option 2: cargo-binstall (Recommended for Rust users)
+
+Fast binary installation without compilation:
+
+```bash
+# One-time: Install cargo-binstall
+cargo install cargo-binstall
+
+# Install remagnify
+cargo binstall remagnify
+```
+
+This downloads pre-built binaries from GitHub releases. Much faster than building from source!
+
+### Option 3: cargo install (Build from Source)
+
+Traditional Cargo installation (compiles from source):
+
+```bash
+# From crates.io
+cargo install remagnify
+
+# Or from git
+cargo install --git https://github.com/alfredodeza/remagnify
+
+# Or from local directory
 cargo install --path .
 ```
 
-Or copy the binary to your PATH:
+### Option 4: Manual Download
+
+For users who want full control:
 
 ```bash
-sudo cp target/release/remagnify /usr/local/bin/
+# Download from releases page: https://github.com/alfredodeza/remagnify/releases
+VERSION=v0.1.0
+curl -LO https://github.com/alfredodeza/remagnify/releases/download/${VERSION}/remagnify-${VERSION}-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/alfredodeza/remagnify/releases/download/${VERSION}/remagnify-${VERSION}-x86_64-unknown-linux-gnu.tar.gz.sha256
+
+# Verify and install
+sha256sum -c remagnify-${VERSION}-x86_64-unknown-linux-gnu.tar.gz.sha256
+tar xzf remagnify-${VERSION}-x86_64-unknown-linux-gnu.tar.gz
+sudo mv remagnify /usr/local/bin/
 ```
 
 ## Usage

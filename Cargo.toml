@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Alfredo <alfredo@example.com>"]
 description = "A wlroots-compatible Wayland magnifier written in Rust"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/remagnify"
+repository = "https://github.com/alfredodeza/remagnify"
 keywords = ["wayland", "magnifier", "wlroots", "accessibility"]
 categories = ["gui", "accessibility"]
 
