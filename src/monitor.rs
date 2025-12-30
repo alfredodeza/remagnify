@@ -74,8 +74,12 @@ impl Monitor {
     pub fn set_scale(&mut self, scale: i32) {
         self.scale = scale;
         self.fractional_scale = scale as f64;
-        log::debug!("Monitor {} scale: {} (fractional: {})",
-            self.wayland_name, scale, self.fractional_scale);
+        log::debug!(
+            "Monitor {} scale: {} (fractional: {})",
+            self.wayland_name,
+            scale,
+            self.fractional_scale
+        );
     }
 
     /// Override the fractional scale value (e.g., from CLI --scale option).
@@ -167,10 +171,20 @@ mod tests {
             let logical_w = size.x / scale;
             let logical_h = size.y / scale;
 
-            assert!((logical_w - expected_w).abs() < 1.0,
-                "Width mismatch for {}x{} at {}x scale", width, height, scale);
-            assert!((logical_h - expected_h).abs() < 1.0,
-                "Height mismatch for {}x{} at {}x scale", width, height, scale);
+            assert!(
+                (logical_w - expected_w).abs() < 1.0,
+                "Width mismatch for {}x{} at {}x scale",
+                width,
+                height,
+                scale
+            );
+            assert!(
+                (logical_h - expected_h).abs() < 1.0,
+                "Height mismatch for {}x{} at {}x scale",
+                width,
+                height,
+                scale
+            );
         }
     }
 }

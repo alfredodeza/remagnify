@@ -27,7 +27,12 @@ pub struct LayerSurface {
 }
 
 impl LayerSurface {
-    pub fn new(monitor_idx: usize, surface: WlSurface, monitor_size: Vector2D, monitor_scale: i32) -> Self {
+    pub fn new(
+        monitor_idx: usize,
+        surface: WlSurface,
+        monitor_size: Vector2D,
+        monitor_scale: i32,
+    ) -> Self {
         Self {
             monitor_idx,
             surface,
@@ -63,7 +68,8 @@ impl LayerSurface {
 
     pub fn send_frame<T>(&mut self, qh: &wayland_client::QueueHandle<T>)
     where
-        T: wayland_client::Dispatch<wayland_client::protocol::wl_callback::WlCallback, ()> + 'static,
+        T: wayland_client::Dispatch<wayland_client::protocol::wl_callback::WlCallback, ()>
+            + 'static,
     {
         // Swap buffers
         self.last_buffer = if self.last_buffer == 0 { 1 } else { 0 };
@@ -76,8 +82,7 @@ impl LayerSurface {
             buffer.busy = true;
 
             // Damage and attach
-            self.surface
-                .damage_buffer(0, 0, i32::MAX, i32::MAX);
+            self.surface.damage_buffer(0, 0, i32::MAX, i32::MAX);
             self.surface.attach(Some(&buffer.buffer), 0, 0);
 
             // For fractional scaling, we create buffers at logical size, so buffer_scale=1

@@ -46,10 +46,10 @@ impl Default for Config {
             size: Vector2D::new(300.0, 150.0),
             render_inactive: false,
             continuous_capture: true,
-            zoom_speed: 0.05, // Default zoom speed (5% per scroll notch)
+            zoom_speed: 0.05,   // Default zoom speed (5% per scroll notch)
             exit_delay_ms: 200, // Default 200ms delay before exit
-            hide_cursor: true, // Hide cursor by default
-            scale: None, // Auto-detect from wl_output
+            hide_cursor: true,  // Hide cursor by default
+            scale: None,        // Auto-detect from wl_output
         }
     }
 }
@@ -201,7 +201,10 @@ mod tests {
     #[test]
     fn test_parse_size() {
         assert_eq!(parse_size("300x150").unwrap(), Vector2D::new(300.0, 150.0));
-        assert_eq!(parse_size("1920x1080").unwrap(), Vector2D::new(1920.0, 1080.0));
+        assert_eq!(
+            parse_size("1920x1080").unwrap(),
+            Vector2D::new(1920.0, 1080.0)
+        );
         assert!(parse_size("invalid").is_err());
         assert!(parse_size("300").is_err());
         assert!(parse_size("-300x150").is_err());

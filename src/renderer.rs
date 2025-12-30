@@ -175,12 +175,7 @@ impl Renderer {
         Ok(())
     }
 
-    fn draw_outline(
-        &self,
-        ctx: &cairo::Context,
-        position: Vector2D,
-        size: Vector2D,
-    ) -> Result<()> {
+    fn draw_outline(&self, ctx: &cairo::Context, position: Vector2D, size: Vector2D) -> Result<()> {
         ctx.rectangle(
             position.x - size.x / 2.0,
             position.y - size.y / 2.0,

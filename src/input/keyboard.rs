@@ -49,6 +49,8 @@ impl Keyboard {
             return None;
         }
 
-        self.xkb_state.as_ref().map(|xkb_state| xkb_state.key_get_one_sym((key + 8).into()))
+        self.xkb_state
+            .as_ref()
+            .map(|xkb_state| xkb_state.key_get_one_sym((key + 8).into()))
     }
 }

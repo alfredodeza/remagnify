@@ -82,18 +82,15 @@ impl Magnifier {
         })
         .context("Error setting Ctrl-C handler")?;
 
-        Ok(Self {
-            config,
-            running,
-        })
+        Ok(Self { config, running })
     }
 
     pub fn run(&mut self) -> Result<()> {
         log::info!("Connecting to Wayland...");
 
         // Connect to Wayland
-        let conn = Connection::connect_to_env()
-            .context("Failed to connect to Wayland compositor")?;
+        let conn =
+            Connection::connect_to_env().context("Failed to connect to Wayland compositor")?;
 
         let display = conn.display();
         let mut event_queue = conn.new_event_queue();
@@ -175,10 +172,14 @@ impl Magnifier {
             anyhow::bail!("SHM not available");
         }
         if state.layer_shell.is_none() {
-            anyhow::bail!("Layer shell not available - your compositor doesn't support wlr-layer-shell");
+            anyhow::bail!(
+                "Layer shell not available - your compositor doesn't support wlr-layer-shell"
+            );
         }
         if state.screencopy_manager.is_none() {
-            anyhow::bail!("Screencopy not available - your compositor doesn't support wlr-screencopy");
+            anyhow::bail!(
+                "Screencopy not available - your compositor doesn't support wlr-screencopy"
+            );
         }
 
         log::info!("All required protocols available - setting up surfaces...");
@@ -205,7 +206,9 @@ impl Magnifier {
             );
 
             // Configure the layer surface
-            use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::{Anchor, KeyboardInteractivity};
+            use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::{
+                Anchor, KeyboardInteractivity,
+            };
             layer_surface.set_anchor(Anchor::Top | Anchor::Right | Anchor::Bottom | Anchor::Left);
             layer_surface.set_exclusive_zone(-1);
             // OnDemand allows keyboard focus when we need it (for Escape key)
@@ -216,12 +219,7 @@ impl Magnifier {
             log::info!("Layer surface {} created and configured", idx);
 
             // Create LayerSurface wrapper
-            let mut ls = LayerSurface::new(
-                idx,
-                surface,
-                monitor.size,
-                monitor.scale,
-            );
+            let mut ls = LayerSurface::new(idx, surface, monitor.size, monitor.scale);
             ls.fractional_scale_value = monitor.fractional_scale;
             ls.layer_surface = Some(layer_surface);
             state.layer_surfaces.push(ls);
@@ -277,7 +275,10 @@ impl Magnifier {
 
             // Attach and commit the first buffer to map the surface
             layer_surface.send_frame(&qh);
-            log::info!("Layer surface {} mapped with initial buffer", layer_surface.monitor_idx);
+            log::info!(
+                "Layer surface {} mapped with initial buffer",
+                layer_surface.monitor_idx
+            );
         }
 
         conn.flush()?;
@@ -332,7 +333,7 @@ impl Magnifier {
 
             // Dispatch pending events
             match event_queue.dispatch_pending(&mut state) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => {
                     log::error!("Failed to dispatch events: {}", e);
                     break;
@@ -348,8 +349,8 @@ impl Magnifier {
             // Try to read events with proper error handling
             if let Some(guard) = event_queue.prepare_read() {
                 // Use poll to wait for events with timeout
-                use std::os::unix::io::AsRawFd;
                 use nix::libc;
+                use std::os::unix::io::AsRawFd;
                 let fd = guard.connection_fd().as_raw_fd();
 
                 // Poll with 100ms timeout
@@ -380,35 +381,39 @@ impl Magnifier {
         log::info!("Event loop terminated");
         Ok(())
     }
-
 }
 
 impl AppState {
     /// Render a monitor's screen buffer to its layer surface
-    fn render_monitor<T>(
-        &mut self,
-        monitor_idx: usize,
-        qh: &QueueHandle<T>,
-    ) -> Result<()>
+    fn render_monitor<T>(&mut self, monitor_idx: usize, qh: &QueueHandle<T>) -> Result<()>
     where
         T: wayland_client::Dispatch<WlBuffer, ()> + 'static,
         T: wayland_client::Dispatch<WlShmPool, ()> + 'static,
         T: wayland_client::Dispatch<WlCallback, ()> + 'static,
     {
         // Get the monitor's screen buffer
-        let monitor = self.monitors.get_mut(monitor_idx)
+        let monitor = self
+            .monitors
+            .get_mut(monitor_idx)
             .context("Invalid monitor index")?;
 
-        let screen_buffer = monitor.screen_buffer.as_mut()
+        let screen_buffer = monitor
+            .screen_buffer
+            .as_mut()
             .context("No screen buffer available")?;
 
         // Find the corresponding layer surface
-        let layer_surface = self.layer_surfaces.iter_mut()
+        let layer_surface = self
+            .layer_surfaces
+            .iter_mut()
             .find(|ls| ls.monitor_idx == monitor_idx)
             .context("No layer surface found for monitor")?;
 
         if !layer_surface.configured {
-            log::warn!("Layer surface {} not configured yet, skipping render", monitor_idx);
+            log::warn!(
+                "Layer surface {} not configured yet, skipping render",
+                monitor_idx
+            );
             return Ok(());
         }
 
@@ -434,7 +439,8 @@ impl AppState {
             }
         }
 
-        let output_buffer = layer_surface.get_available_buffer()
+        let output_buffer = layer_surface
+            .get_available_buffer()
             .context("No available buffer after creation")?;
 
         // Sync zoom from AppState to renderer
@@ -455,8 +461,11 @@ impl AppState {
                 false, // force_inactive
                 false, // render_inactive
             )?;
-            log::debug!("Rendered magnifier on monitor {} at position {:?}",
-                monitor_idx, self.magnifier_position);
+            log::debug!(
+                "Rendered magnifier on monitor {} at position {:?}",
+                monitor_idx,
+                self.magnifier_position
+            );
         } else {
             // Render inactive (no magnifier) on other monitors
             let ctx = output_buffer.create_cairo_context()?;
@@ -520,7 +529,8 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
                 }
                 "zwlr_screencopy_manager_v1" => {
                     use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
-                    let screencopy_mgr = registry.bind::<ZwlrScreencopyManagerV1, _, _>(name, 3, qh, ());
+                    let screencopy_mgr =
+                        registry.bind::<ZwlrScreencopyManagerV1, _, _>(name, 3, qh, ());
                     state.screencopy_manager = Some(screencopy_mgr);
                     log::info!("Screencopy manager available");
                 }
@@ -577,8 +587,12 @@ impl Dispatch<WlSeat, ()> for AppState {
                 let pointer_cap: u32 = Capability::Pointer.into();
                 let keyboard_cap: u32 = Capability::Keyboard.into();
 
-                log::info!("Seat capabilities: raw={} pointer={} keyboard={}",
-                    caps, caps & pointer_cap != 0, caps & keyboard_cap != 0);
+                log::info!(
+                    "Seat capabilities: raw={} pointer={} keyboard={}",
+                    caps,
+                    caps & pointer_cap != 0,
+                    caps & keyboard_cap != 0
+                );
 
                 if caps & pointer_cap != 0 {
                     log::info!("Getting pointer from seat...");
@@ -613,10 +627,7 @@ impl Dispatch<WlOutput, ()> for AppState {
         use wayland_client::protocol::wl_output::Event;
 
         // Find the monitor
-        let monitor = state
-            .monitors
-            .iter_mut()
-            .find(|m| &m.output == output);
+        let monitor = state.monitors.iter_mut().find(|m| &m.output == output);
 
         if let Some(monitor) = monitor {
             match event {
@@ -664,7 +675,11 @@ impl Dispatch<WlKeyboard, ()> for AppState {
         use wayland_client::protocol::wl_keyboard::Event;
 
         match event {
-            Event::Key { key, state: key_state, .. } => {
+            Event::Key {
+                key,
+                state: key_state,
+                ..
+            } => {
                 use wayland_client::protocol::wl_keyboard::KeyState;
                 use wayland_client::WEnum;
 
@@ -705,7 +720,12 @@ impl Dispatch<WlPointer, ()> for AppState {
         log::trace!("WlPointer event: {:?}", event);
 
         match event {
-            Event::Enter { serial, surface, surface_x, surface_y } => {
+            Event::Enter {
+                serial,
+                surface,
+                surface_x,
+                surface_y,
+            } => {
                 // Hide the cursor when entering our surfaces (if configured)
                 if state.hide_cursor {
                     if let Some(ref pointer) = state.pointer {
@@ -715,14 +735,18 @@ impl Dispatch<WlPointer, ()> for AppState {
                 }
 
                 // Find which monitor this surface belongs to
-                let monitor_idx = state.layer_surfaces.iter()
+                let monitor_idx = state
+                    .layer_surfaces
+                    .iter()
                     .find(|ls| ls.surface == surface)
                     .map(|ls| ls.monitor_idx);
 
                 if let Some(idx) = monitor_idx {
                     // Get monitor logical size for coordinate conversion
                     // Pointer coordinates are in logical space
-                    let monitor_size = state.monitors.get(idx)
+                    let monitor_size = state
+                        .monitors
+                        .get(idx)
                         .map(|m| m.get_logical_size())
                         .unwrap_or_else(|| Vector2D::new(1920.0, 1080.0));
 
@@ -747,12 +771,19 @@ impl Dispatch<WlPointer, ()> for AppState {
                     // Invalid coordinates indicate spurious events from surface creation
                     if !state.initialization_complete {
                         // Validate coordinates are within monitor bounds
-                        let coords_valid = local_x >= 0.0 && local_x <= monitor_size.x
-                            && local_y >= 0.0 && local_y <= monitor_size.y;
+                        let coords_valid = local_x >= 0.0
+                            && local_x <= monitor_size.x
+                            && local_y >= 0.0
+                            && local_y <= monitor_size.y;
 
                         if coords_valid && state.first_enter_during_init.is_none() {
                             state.first_enter_during_init = Some((idx, local_x, local_y));
-                            log::info!("✓ Saved FIRST valid Enter: monitor {} at ({:.1}, {:.1})", idx, local_x, local_y);
+                            log::info!(
+                                "✓ Saved FIRST valid Enter: monitor {} at ({:.1}, {:.1})",
+                                idx,
+                                local_x,
+                                local_y
+                            );
                         } else if !coords_valid {
                             log::info!("✗ Ignoring invalid Enter: monitor {} at ({:.1}, {:.1}) outside {}x{}",
                                 idx, local_x, local_y, monitor_size.x as i32, monitor_size.y as i32);
@@ -770,7 +801,12 @@ impl Dispatch<WlPointer, ()> for AppState {
 
                     // Render at new pointer position
                     // (magnifier will only show if pointer_position_confirmed is true from Motion)
-                    if state.monitors.get(idx).and_then(|m| m.screen_buffer.as_ref()).is_some() {
+                    if state
+                        .monitors
+                        .get(idx)
+                        .and_then(|m| m.screen_buffer.as_ref())
+                        .is_some()
+                    {
                         if let Err(e) = Self::render_monitor(state, idx, _qh) {
                             log::error!("Failed to render on entry: {}", e);
                         }
@@ -793,18 +829,26 @@ impl Dispatch<WlPointer, ()> for AppState {
                     }
                 }
             }
-            Event::Motion { surface_x, surface_y, .. } => {
+            Event::Motion {
+                surface_x,
+                surface_y,
+                ..
+            } => {
                 // Motion event provides reliable pointer position
                 // Mark position as confirmed on first motion
                 if !state.pointer_position_confirmed {
                     state.pointer_position_confirmed = true;
-                    log::info!("✓ Pointer position confirmed via Motion - magnifier will now be visible");
+                    log::info!(
+                        "✓ Pointer position confirmed via Motion - magnifier will now be visible"
+                    );
                 }
 
                 // Convert coordinates (handle Hyprland's global coordinates quirk)
                 if let Some(monitor_idx) = state.active_monitor {
                     // Pointer coordinates are in logical space
-                    let monitor_size = state.monitors.get(monitor_idx)
+                    let monitor_size = state
+                        .monitors
+                        .get(monitor_idx)
                         .map(|m| m.get_logical_size())
                         .unwrap_or_else(|| Vector2D::new(1920.0, 1080.0));
 
@@ -830,7 +874,12 @@ impl Dispatch<WlPointer, ()> for AppState {
                 // Render the magnifier at the new position
                 if let Some(monitor_idx) = state.active_monitor {
                     // Only render if screencopy is ready
-                    if state.monitors.get(monitor_idx).and_then(|m| m.screen_buffer.as_ref()).is_some() {
+                    if state
+                        .monitors
+                        .get(monitor_idx)
+                        .and_then(|m| m.screen_buffer.as_ref())
+                        .is_some()
+                    {
                         if let Err(e) = Self::render_monitor(state, monitor_idx, _qh) {
                             log::error!("Failed to render on motion: {}", e);
                         }
@@ -848,11 +897,17 @@ impl Dispatch<WlPointer, ()> for AppState {
                     let delta = -value / 120.0; // Normalize scroll delta
                     state.zoom = (state.zoom + delta * state.zoom_speed).clamp(0.01, 1.0);
                     state.renderer.set_zoom(state.zoom);
-                    log::debug!("Zoom adjusted to {:.2}x (zoom factor: {:.2})", 1.0 / state.zoom, state.zoom);
+                    log::debug!(
+                        "Zoom adjusted to {:.2}x (zoom factor: {:.2})",
+                        1.0 / state.zoom,
+                        state.zoom
+                    );
 
                     // Exit when zoomed all the way out (no magnification)
                     if state.zoom >= 1.0 {
-                        log::debug!("Zoomed to 1.0 (no magnification), clearing overlay and exiting...");
+                        log::debug!(
+                            "Zoomed to 1.0 (no magnification), clearing overlay and exiting..."
+                        );
 
                         // Clear all overlays first
                         for layer_surface in &mut state.layer_surfaces {
@@ -871,7 +926,9 @@ impl Dispatch<WlPointer, ()> for AppState {
                         // Wait for exit delay to prevent scroll events from affecting underlying window
                         if state.exit_delay_ms > 0 {
                             log::debug!("Waiting {}ms before exit...", state.exit_delay_ms);
-                            std::thread::sleep(std::time::Duration::from_millis(state.exit_delay_ms));
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                state.exit_delay_ms,
+                            ));
                         }
 
                         state.running.store(false, Ordering::SeqCst);
@@ -891,9 +948,9 @@ impl Dispatch<WlPointer, ()> for AppState {
     }
 }
 
-use wayland_client::protocol::wl_shm_pool::WlShmPool;
 use wayland_client::protocol::wl_buffer::WlBuffer;
 use wayland_client::protocol::wl_callback::WlCallback;
+use wayland_client::protocol::wl_shm_pool::WlShmPool;
 
 impl Dispatch<WlCallback, ()> for AppState {
     fn event(
@@ -939,8 +996,8 @@ impl Dispatch<WlBuffer, ()> for AppState {
 // Layer shell protocol implementations
 use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1;
 use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
-use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::ZwlrScreencopyFrameV1;
+use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 impl Dispatch<ZwlrLayerShellV1, ()> for AppState {
     fn event(
@@ -1013,13 +1070,26 @@ impl Dispatch<ZwlrScreencopyFrameV1, ()> for AppState {
         use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_frame_v1::Event;
 
         // Find which monitor this frame belongs to
-        let monitor_idx = state.pending_frames.iter()
+        let monitor_idx = state
+            .pending_frames
+            .iter()
             .find(|(f, _)| f == frame)
             .map(|(_, idx)| *idx);
 
         match event {
-            Event::Buffer { format, width, height, stride } => {
-                log::debug!("Screencopy buffer: {}x{} format={:?} stride={}", width, height, format, stride);
+            Event::Buffer {
+                format,
+                width,
+                height,
+                stride,
+            } => {
+                log::debug!(
+                    "Screencopy buffer: {}x{} format={:?} stride={}",
+                    width,
+                    height,
+                    format,
+                    stride
+                );
 
                 if let Some(idx) = monitor_idx {
                     if let Some(shm) = &state.shm {
@@ -1030,11 +1100,7 @@ impl Dispatch<ZwlrScreencopyFrameV1, ()> for AppState {
                         let format_u32: u32 = format.into();
 
                         match crate::pool_buffer::PoolBuffer::new(
-                            pixel_size,
-                            format_u32,
-                            stride,
-                            shm,
-                            qh,
+                            pixel_size, format_u32, stride, shm, qh,
                         ) {
                             Ok(buffer) => {
                                 log::debug!("Created screencopy buffer for monitor {}", idx);

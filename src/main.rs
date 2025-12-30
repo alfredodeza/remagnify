@@ -1,11 +1,11 @@
 mod config;
+mod input;
+mod layer_surface;
 mod magnifier;
 mod monitor;
-mod layer_surface;
 mod pool_buffer;
-mod renderer;
-mod input;
 mod protocols;
+mod renderer;
 mod utils;
 
 use clap::Parser;

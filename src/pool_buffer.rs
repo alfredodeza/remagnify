@@ -195,8 +195,7 @@ unsafe impl Send for PoolBuffer {}
 fn create_shm_file(size: usize) -> Result<(RawFd, String)> {
     use nix::libc;
 
-    let xdg_runtime = std::env::var("XDG_RUNTIME_DIR")
-        .context("XDG_RUNTIME_DIR not set")?;
+    let xdg_runtime = std::env::var("XDG_RUNTIME_DIR").context("XDG_RUNTIME_DIR not set")?;
 
     // Create a template path
     let template = format!("{}/.remagnify_XXXXXX", xdg_runtime);
@@ -217,14 +216,12 @@ fn create_shm_file(size: usize) -> Result<(RawFd, String)> {
     let path = String::from_utf8(path_bytes)?;
 
     // Set FD_CLOEXEC flag (using raw fd for nix 0.27)
-    fcntl(fd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
-        .context("Failed to set FD_CLOEXEC")?;
+    fcntl(fd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)).context("Failed to set FD_CLOEXEC")?;
 
     // Resize the file using raw fd
     use std::os::unix::io::{FromRawFd, IntoRawFd};
     let owned_fd = unsafe { std::os::fd::OwnedFd::from_raw_fd(fd) };
-    ftruncate(&owned_fd, size as i64)
-        .context("Failed to truncate file")?;
+    ftruncate(&owned_fd, size as i64).context("Failed to truncate file")?;
 
     // Extract raw fd before owned_fd is dropped
     let raw_fd = owned_fd.into_raw_fd();

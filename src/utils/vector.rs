@@ -3,7 +3,7 @@
 //! Provides a Vector2D type with common arithmetic operations for
 //! coordinate calculations and transformations.
 
-use std::ops::{Add, Sub, Mul, Div, AddAssign, SubAssign, MulAssign, DivAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
 /// A 2D vector with floating-point components.
 ///
