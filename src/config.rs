@@ -158,7 +158,7 @@ impl Config {
     /// A Config with validated values
     pub fn from_cli(cli: Cli) -> Self {
         // Validate scale if provided
-        let scale = cli.scale.map(|s| {
+        let scale = cli.scale.and_then(|s| {
             if s <= 0.0 {
                 log::warn!("Scale must be positive, using default");
                 None
@@ -168,7 +168,7 @@ impl Config {
             } else {
                 Some(s)
             }
-        }).flatten();
+        });
 
         Config {
             move_type: cli.move_type,
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(config.size.y, 200.0);
         assert_eq!(config.zoom_speed, 0.1);
         assert_eq!(config.exit_delay_ms, 500);
-        assert_eq!(config.hide_cursor, true); // Default: cursor hidden
+        assert!(config.hide_cursor); // Default: cursor hidden
         assert_eq!(config.scale, None);
     }
 
@@ -304,7 +304,7 @@ mod tests {
         };
 
         let config = Config::from_cli(cli_default);
-        assert_eq!(config.hide_cursor, true); // Cursor should be hidden
+        assert!(config.hide_cursor); // Cursor should be hidden
 
         // Test that --show-cursor flag works
         let cli_show = Cli {
@@ -321,7 +321,7 @@ mod tests {
         };
 
         let config = Config::from_cli(cli_show);
-        assert_eq!(config.hide_cursor, false); // Cursor should be visible
+        assert!(!config.hide_cursor); // Cursor should be visible
     }
 
     #[test]
