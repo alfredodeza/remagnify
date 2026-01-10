@@ -2,6 +2,8 @@
 
 A Rust port of hyprmagnifier, a wlroots-compatible Wayland screen magnifier for compositors like Hyprland and Sway.
 
+![demo](./.github/rainbow.gif)
+
 ## Features
 
 - **Real-time screen magnification** with mouse tracking
