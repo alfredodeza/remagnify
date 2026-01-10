@@ -1,6 +1,6 @@
 # Remagnify
 
-A Rust port of [hyprmagnifier](https://github.com/hyprwm/hyprmagnifier), a wlroots-compatible Wayland screen magnifier for compositors like Hyprland and Sway.
+A Rust port of hyprmagnifier, a wlroots-compatible Wayland screen magnifier for compositors like Hyprland and Sway.
 
 ## Features
 
