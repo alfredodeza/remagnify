@@ -68,6 +68,14 @@ pub struct AppState {
     // Track the first VALID Enter event during initialization
     // Only Enter events with coordinates within monitor bounds are saved
     first_enter_during_init: Option<(usize, f64, f64)>, // (monitor_idx, x, y)
+
+    // Guard: do not render the active magnifier until ALL monitors have completed
+    // their initial screencopy.  In newer Hyprland the compositor captures the
+    // next composited frame for screencopy; any render committed before Ready
+    // would bake the magnifier overlay into the source screenshot, producing a
+    // recursive cascade of boxes.  While this flag is false render_monitor always
+    // outputs a transparent buffer so the captured frame shows clean desktop.
+    screencopy_complete: bool,
 }
 
 impl Magnifier {
@@ -121,6 +129,7 @@ impl Magnifier {
             pointer_position_confirmed: false,
             initialization_complete: false,
             first_enter_during_init: None,
+            screencopy_complete: false,
         };
 
         // Get registry
@@ -397,10 +406,19 @@ impl AppState {
             .get_mut(monitor_idx)
             .context("Invalid monitor index")?;
 
-        let screen_buffer = monitor
-            .screen_buffer
-            .as_mut()
-            .context("No screen buffer available")?;
+        // Prefer the permanent snapshot over the raw screen_buffer.
+        // Hyprland's SHM screencopy calls copy() on every frame commit
+        // (m_copied is never set for SHM frames), which overwrites screen_buffer
+        // with the composited output that already includes our overlay.
+        // The permanent snapshot was captured once before any overlay was rendered.
+        let screen_buffer = if monitor.screenshot.is_some() {
+            monitor.screenshot.as_mut().unwrap()
+        } else {
+            monitor
+                .screen_buffer
+                .as_mut()
+                .context("No screen buffer available")?
+        };
 
         // Find the corresponding layer surface
         let layer_surface = self
@@ -449,7 +467,9 @@ impl AppState {
         // Only show magnifier on the active monitor AND if we have a confirmed pointer position
         // We wait for the first Motion event to ensure accurate coordinates (Enter events
         // during initialization can have wrong coordinates for offset monitors)
-        let is_active = self.pointer_position_confirmed && self.active_monitor == Some(monitor_idx);
+        let is_active = self.screencopy_complete
+            && self.pointer_position_confirmed
+            && self.active_monitor == Some(monitor_idx);
 
         if is_active {
             // Render the magnified view on the active monitor
@@ -1124,36 +1144,95 @@ impl Dispatch<ZwlrScreencopyFrameV1, ()> for AppState {
             Event::Ready { .. } => {
                 log::debug!("Screencopy frame ready for monitor {:?}", monitor_idx);
 
-                // Single capture complete - screen data is now available
                 if let Some(idx) = monitor_idx {
                     log::info!("Monitor {} screen capture complete", idx);
 
-                    // Clean up the pending frame
+                    // Releasing the frame object sends wl_destroy to the compositor,
+                    // but Hyprland's SHM path never sets m_copied=true so onOutputCommit
+                    // keeps calling copy() (and sending Ready) on every frame commit.
+                    // We guard against that loop with initial_render_done below.
                     state.pending_frames.retain(|(f, _)| f != frame);
 
-                    // Render this monitor immediately when its screencopy is ready
-                    // This matches hyprmagnifier's behavior where renderSurface is called
-                    // immediately in the Ready callback (Monitor.cpp:113)
-                    // The render_monitor function already handles inactive monitors correctly
-                    // by rendering them transparent if they're not the active monitor
-                    log::debug!("Rendering monitor {} after screencopy complete", idx);
+                    // On the FIRST ready for each monitor, make a permanent deep copy of
+                    // the screenshot before any render commits a buffer that would cause
+                    // Hyprland to overwrite screen_buffer with an overlay-contaminated frame.
+                    if state.monitors.get(idx).map_or(false, |m| m.screenshot.is_none()) {
+                        // Extract pointer/size info without holding a borrow into monitors.
+                        let copy_info = state.monitors.get(idx).and_then(|m| {
+                            m.screen_buffer.as_ref().map(|src| {
+                                (src.data, src.size, src.pixel_size, src.stride, src.format)
+                            })
+                        });
 
-                    match Self::render_monitor(state, idx, qh) {
-                        Ok(_) => {
-                            log::debug!("Monitor {} rendered successfully", idx);
-                            if !state.initial_render_done {
-                                state.initial_render_done = true;
-                                log::info!("Initial render completed");
+                        if let Some((src_ptr, src_size, pixel_size, stride, format)) = copy_info {
+                            if let Some(shm) = &state.shm {
+                                match crate::pool_buffer::PoolBuffer::new(
+                                    pixel_size, format, stride, shm, qh,
+                                ) {
+                                    Ok(perm) => {
+                                        // Safety: src_ptr and perm.data are disjoint SHM
+                                        // mappings; screen_buffer is not dropped here.
+                                        unsafe {
+                                            std::ptr::copy_nonoverlapping(
+                                                src_ptr as *const u8,
+                                                perm.data,
+                                                src_size,
+                                            );
+                                        }
+                                        if let Some(m) = state.monitors.get_mut(idx) {
+                                            m.screenshot = Some(perm);
+                                        }
+                                        log::info!(
+                                            "Permanent screenshot captured for monitor {}",
+                                            idx
+                                        );
+                                    }
+                                    Err(e) => {
+                                        log::error!(
+                                            "Failed to allocate permanent screenshot buffer: {}",
+                                            e
+                                        );
+                                    }
+                                }
                             }
-                        }
-                        Err(e) => {
-                            log::error!("Failed to render monitor {}: {}", idx, e);
                         }
                     }
 
-                    // Note: We don't request another frame - this is a single capture
-                    // The magnifier will now use this static capture and update only
-                    // the magnified region as the cursor moves
+                    if state.pending_frames.is_empty() {
+                        state.screencopy_complete = true;
+                        log::info!("All screencopy complete - magnifier now active");
+                    }
+
+                    // Only render once from the Ready handler (to produce the initial
+                    // transparent/inactive commit).  After that, rendering is driven
+                    // exclusively by pointer events.  If we rendered on every Ready we
+                    // would: render → commit buffer → onOutputCommit fires → copy() →
+                    // Ready fires again → infinite loop.
+                    if !state.initial_render_done {
+                        if let Err(e) = Self::render_monitor(state, idx, qh) {
+                            log::error!("Failed to render monitor {}: {}", idx, e);
+                        } else {
+                            state.initial_render_done = true;
+                            log::info!("Initial render completed");
+                        }
+
+                        // Also render other monitors so they commit their initial
+                        // transparent state and receive proper input regions.
+                        if state.screencopy_complete {
+                            let monitor_count = state.monitors.len();
+                            for m_idx in 0..monitor_count {
+                                if m_idx != idx {
+                                    if let Err(e) = Self::render_monitor(state, m_idx, qh) {
+                                        log::error!(
+                                            "Failed to render monitor {} after screencopy: {}",
+                                            m_idx,
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Event::Failed => {

@@ -19,6 +19,14 @@ pub struct Monitor {
     #[allow(dead_code)]
     pub screen_flags: u32,
 
+    // Permanent deep copy of the initial clean screenshot.
+    // Hyprland's SHM screencopy never sets m_copied=true, so onOutputCommit()
+    // overwrites screen_buffer on every frame commit.  We capture a snapshot
+    // here the moment the first Ready event fires (before any renders can
+    // commit buffers that would loop back into the capture) and use it for
+    // all magnifier rendering, breaking the cascade.
+    pub screenshot: Option<PoolBuffer>,
+
     // Layer surface index
     pub layer_surface_idx: Option<usize>,
 }
@@ -37,6 +45,7 @@ impl Monitor {
             screen_buffer: None,
             screen_buffer_format: 0,
             screen_flags: 0,
+            screenshot: None,
             layer_surface_idx: None,
         }
     }
